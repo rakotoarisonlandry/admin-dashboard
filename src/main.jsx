@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
-  AlertsControl, Empty, Icon, LiveBadge, Login, Modal, Shell, Stat, ToastProvider, addDays, dayKey, e, formatDate, formatDay, formatTime,
+  AlertsControl, Empty, Icon, LiveBadge, Login, Metric, Modal, Shell, ToastProvider, addDays, dayKey, e, formatDate, formatDay, formatTime,
   initials, post, request, useAlerts, useConfirm, useDocumentTitle, useLiveStream, useSession, useToast,
 } from './common';
 import { MapPicker, PositionDialog, addressAt, inMadagascar, searchAddress } from './position-picker';
@@ -142,12 +142,12 @@ function AdminDashboard({ user, logout }) {
   </Shell>;
 
   const nav = <>
-    <div className="side-label">VOS BOUTIQUES</div>
+    <div className="side-label">Vos boutiques</div>
     <nav className="nav">
       {shops.map(item => <button key={item.id} className={`nav-item ${item.id === selected ? 'active' : ''}`} onClick={() => setSelected(item.id)}>
-        <Icon name="shop" size={19}/><span className="nav-copy"><span>{item.name}</span><small>{isPublished(item) ? '● Publiée' : '○ Non publiée'}</small></span>
+        <Icon name="shop" size={19}/><span className="nav-copy"><span>{item.name}</span><small><span className={`state-dot ${isPublished(item) ? 'on' : ''}`}/>{isPublished(item) ? 'Publiée' : 'Non publiée'}</small></span>
       </button>)}
-      <button className="nav-item" onClick={() => setCreating(true)} style={{ color: 'var(--orange-dark)' }}><Icon name="plus" size={19}/>Nouvelle boutique</button>
+      <button className="nav-item add" onClick={() => setCreating(true)}><Icon name="plus" size={19}/>Nouvelle boutique</button>
     </nav>
   </>;
   const mobileNav = <select aria-label="Boutique" value={selected} onChange={event => setSelected(event.target.value)}>{shops.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>;
@@ -156,73 +156,73 @@ function AdminDashboard({ user, logout }) {
     <div className="page">
       <div className="page-heading">
         <div>
-          <span className="eyebrow">Administration</span>
-          <h1>Votre réseau, <span className="accent">en un regard.</span></h1>
-          <p>Publiez vos boutiques, ouvrez des créneaux et constituez vos équipes.</p>
+          <div className="date-line">{formatDay(Date.now())}</div>
+          <h1>Bonjour{user?.name ? ` ${user.name.split(' ')[0]}` : ''}</h1>
         </div>
-        <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+        <div className="heading-tools">
           <AlertsControl alerts={alerts}/>
           <LiveBadge status={live}/>
-          <button className="btn primary" onClick={() => setCreating(true)}><Icon name="plus" size={18}/>Nouvelle boutique</button>
+          {shops.length > 0 && <button className="btn ghost" onClick={() => setCreating(true)}><Icon name="plus" size={18}/>Nouvelle boutique</button>}
         </div>
       </div>
       {error && <div className="notice" role="alert">{error}</div>}
 
-      {loading ? <div className="stats">{[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 92 }}/>)}</div>
+      {loading ? <div className="skeleton" style={{ height: 200 }}/>
         : !shops.length ? <div className="panel"><Empty icon="shop" title="Créez votre première boutique" text="Recherchez-la sur Google : l’adresse et la position GPS sont remplies automatiquement."><button className="btn primary" style={{ marginTop: 18 }} onClick={() => setCreating(true)}>Ajouter une boutique</button></Empty></div>
-          : <>
-            <div className="stats">
-              <Stat hero={!!activity?.pending} icon="bell" label="Demandes en attente" value={activity ? activity.pending : '…'} caption={shop?.name || ''}/>
-              <Stat icon="calendar" label="Aujourd’hui" value={activity ? activity.today : '…'} caption={activity ? `${activity.arrived} client(s) déjà accueilli(s)` : ''}/>
-              <Stat icon="ticket" label="Remplissage 7 jours" value={slots ? `${fillRate} %` : '…'} caption={slots ? `${fill.reserved}/${fill.capacity} places réservées` : ''}/>
-              <Stat icon="users" label="Équipe" value={agents ? agents.length : '…'} caption="Agent(s) dans la boutique"/>
-            </div>
-
-            {shop && <>
-              <div className="section-head">
-                <div>
-                  <span className="eyebrow">Boutique sélectionnée</span>
-                  <h2>{shop.name} <span className={`tag ${published ? 'on' : 'off'}`} style={{ marginLeft: 8, verticalAlign: 'middle' }}>{published ? 'Publiée' : 'Non publiée'}</span></h2>
+          : shop && <>
+            <section className="band" aria-label={shop.name}>
+              <div>
+                <div className="band-label"><span className={`state-dot ${published ? 'on' : ''}`} style={{ display: 'inline-block', marginRight: 8 }}/>{published ? 'Publiée dans l’application' : 'Non publiée'}</div>
+                <h1 className="band-title">{shop.name}</h1>
+                <div className="band-sub">{[shop.address, shop.city].filter(Boolean).join(', ') || 'Adresse non renseignée'}</div>
+                <div className="band-actions">
+                  <button className={`btn ${published ? 'ghost' : 'primary'}`} disabled={!!busy || (!published && shop.status !== 'active')} onClick={() => void togglePublish()}>{published ? 'Suspendre les réservations' : 'Publier la boutique'}</button>
+                  <button type="button" className="btn ghost" onClick={() => setPlacing(true)}><Icon name="pin" size={17}/>{shop.latitude != null && shop.longitude != null ? 'Modifier la position' : 'Placer sur la carte'}</button>
                 </div>
-                <div className="tabs" role="tablist">{[['overview', 'Aperçu'], ['slots', 'Créneaux'], ['team', 'Équipe']].map(([key, label]) =>
-                  <button key={key} role="tab" aria-selected={tab === key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>{label}</button>)}</div>
               </div>
+              <div className="metrics">
+                <Metric alert={!!activity?.pending} value={activity ? activity.pending : '…'} label="Demandes en attente"/>
+                <Metric value={activity ? activity.today : '…'} label={activity ? `Aujourd’hui · ${activity.arrived} accueilli(s)` : 'Aujourd’hui'}/>
+                <Metric value={slots ? `${fillRate} %` : '…'} label="Remplissage 7 jours"/>
+                <Metric value={agents ? agents.length : '…'} label="Agent(s)"/>
+              </div>
+            </section>
+            {shop.status !== 'active' && <div className="notice info">Cette fiche est inactive dans Robia : elle ne peut pas être publiée.</div>}
+
+            <div className="section-head">
+              <div className="tabs" role="tablist">{[['overview', 'Aperçu'], ['slots', 'Créneaux'], ['team', 'Équipe']].map(([key, label]) =>
+                <button key={key} role="tab" aria-selected={tab === key} className={`tab ${tab === key ? 'active' : ''}`} onClick={() => setTab(key)}>{label}</button>)}</div>
+            </div>
 
               {tab === 'overview' && <div className="grid-2">
                 <section className="panel">
-                  <div className="section-head">
-                    <div><h2>{shop.name}</h2><p>{[shop.address, shop.city].filter(Boolean).join(' · ') || 'Adresse non renseignée'}</p><button type="button" className="link-button" onClick={() => setPlacing(true)}><Icon name="pin" size={14}/>{shop.latitude != null && shop.longitude != null ? 'Modifier la position sur la carte' : 'Placer sur la carte'}</button></div>
-                    <button className={`btn ${published ? 'ghost' : 'primary'}`} disabled={!!busy || (!published && shop.status !== 'active')} onClick={() => void togglePublish()}>{published ? 'Suspendre' : 'Publier la boutique'}</button>
-                  </div>
-                  {shop.status !== 'active' && <div className="notice info">Cette fiche est inactive dans Robia : elle ne peut pas être publiée.</div>}
-                  <div className="meter" style={{ marginBottom: 18 }}>
-                    <div className="meter-head"><span>Remplissage des 7 prochains jours</span><span>{fillRate} %</span></div>
+                  <div className="meter">
+                    <div className="meter-head"><span>Remplissage des 7 prochains jours</span><strong>{fillRate} %</strong></div>
                     <div className={`bar ${fillRate >= 100 ? 'full' : ''}`}><span style={{ width: `${Math.min(100, fillRate)}%` }}/></div>
-                    <small>{week.length} créneau(x) · {fill.capacity - fill.reserved} place(s) encore libre(s)</small>
+                    <small>{week.length} créneau(x), {fill.capacity - fill.reserved} place(s) encore libre(s)</small>
                   </div>
-                  <h3 style={{ marginBottom: 10 }}>Prête à recevoir des clients ?</h3>
-                  <div className="list">{checklist.map(item => <div key={item.label} className="row-item" style={item.done ? {} : { background: 'var(--orange-soft)' }}>
-                    <span className="icon-tile solid" style={{ background: item.done ? 'var(--success)' : 'var(--orange)' }}><Icon name={item.done ? 'check' : 'clock'} size={19}/></span>
-                    <span className="row-copy"><strong>{item.label}</strong><small>{item.hint}</small></span>
-                    {!item.done && item.action && <button className="btn soft small" onClick={item.action}>Configurer</button>}
+                  <h2 style={{ margin: '26px 0 6px' }}>Prête à recevoir des clients ?</h2>
+                  <div className="steps">{checklist.map((item, index) => <div key={item.label} className={`step ${item.done ? 'done' : ''}`}>
+                    <span className="step-mark" aria-label={item.done ? 'Fait' : 'À faire'}>{item.done ? <Icon name="check" size={17}/> : index + 1}</span>
+                    <span><strong>{item.label}</strong><small>{item.hint}</small></span>
+                    {!item.done && item.action ? <button className="btn soft small" onClick={item.action}>Configurer</button> : <span/>}
                   </div>)}</div>
                 </section>
                 <div className="stack">
-                  <div className="panel"><span className="eyebrow">Activité récente</span>
+                  <div className="panel"><h2>Activité récente</h2>
                     {activity === null ? <div className="skeleton" style={{ height: 120, marginTop: 12 }}/> : !activity.recent.length ? <p style={{ marginTop: 8 }}>Aucune réservation pour le moment.</p>
-                      : <div className="list" style={{ marginTop: 12 }}>{activity.recent.map(item => <div key={item.id} className="row-item">
+                      : <div className="list" style={{ marginTop: 14 }}>{activity.recent.map(item => <div key={item.id} className="row-item">
                         <span className="avatar soft" style={{ width: 36, height: 36, fontSize: '.8rem' }}>{initials(item.customerName)}</span>
                         <span className="row-copy"><strong>{item.customerName}</strong><small>{formatDate(item.slot?.startsAt)}</small></span>
                         <span className={`tag ${item.checkedInAt ? 'arrived' : item.status}`}>{item.checkedInAt ? 'Arrivé' : { pending: 'En attente', confirmed: 'Confirmé', rejected: 'Refusé', cancelled: 'Annulé' }[item.status]}</span>
                       </div>)}</div>}
                   </div>
-                  <div className="panel"><span className="eyebrow">Horaires d’accueil</span><h3 style={{ marginTop: 6 }}>Lundi – samedi · 08:00 – 16:00</h3><p className="hint">Appliqués par le serveur : aucun créneau ne peut être créé en dehors.</p></div>
+                  <div className="panel"><h3>Lundi au samedi, de 08:00 à 16:00</h3><p className="hint">Appliqués par le serveur : aucun créneau ne peut être créé en dehors.</p></div>
                 </div>
               </div>}
 
               {tab === 'slots' && <SlotsTab base={base} slots={slots} busy={busy} run={run} confirm={confirm} reload={() => loadDetails(selected)}/>}
               {tab === 'team' && <TeamTab base={base} agents={agents} busy={busy} run={run} confirm={confirm} reload={() => loadDetails(selected)} shopName={shop.name} owner={user}/>}
-            </>}
           </>}
     </div>
     {placing && shop && <PositionDialog shop={shop} onClose={() => setPlacing(false)} onSaved={async () => { setPlacing(false); await loadShops(); toast('Position enregistrée. Elle est visible dans l’application.', 'success'); }}/>}
@@ -235,6 +235,7 @@ function SlotsTab({ base, slots, busy, run, confirm, reload }) {
   const today = dayKey(Date.now());
   const [plan, setPlan] = useState({ from: today, to: dayKey(addDays(today, 13)), weekdays: [1, 2, 3, 4, 5, 6], startTime: '08:00', endTime: '16:00', intervalMinutes: 30, capacity: 3 });
   const [weekOf, setWeekOf] = useState(weekStart(today));
+  const [planning, setPlanning] = useState(false);
   const set = (key, value) => setPlan(current => ({ ...current, [key]: value }));
   const preview = useMemo(() => previewPlan(plan, Date.now()), [plan]);
   const weekEnd = dayKey(addDays(weekOf, 7));
@@ -251,6 +252,7 @@ function SlotsTab({ base, slots, busy, run, confirm, reload }) {
       const result = await post(`${base}/slots/plan`, { ...plan, intervalMinutes: Number(plan.intervalMinutes), capacity: Number(plan.capacity) });
       await reload();
       setWeekOf(weekStart(plan.from));
+      setPlanning(false);
       return result;
     }, 'Créneaux publiés. Les doublons éventuels ont été ignorés.');
   };
@@ -272,39 +274,41 @@ function SlotsTab({ base, slots, busy, run, confirm, reload }) {
     }, 'Journée fermée aux nouvelles réservations.');
   };
 
-  return <div className="grid-2">
-    <section className="panel">
-      <div className="section-head">
-        <div><span className="eyebrow">Planning</span><h2>Semaine du {formatDay(addDays(weekOf, 0), { day: 'numeric', month: 'long' })}</h2><p>Ajustez la capacité, supprimez un créneau vide ou fermez une journée.</p></div>
-        <div className="week-nav">
-          <button className="icon-button" aria-label="Semaine précédente" disabled={weekOf <= weekStart(today)} onClick={() => setWeekOf(dayKey(addDays(weekOf, -7)))}><Icon name="back" size={17}/></button>
-          <button className="btn ghost small" onClick={() => setWeekOf(weekStart(today))}>Cette semaine</button>
-          <button className="icon-button" aria-label="Semaine suivante" disabled={weekEnd > lastSlotDay && weekOf >= weekStart(lastSlotDay)} onClick={() => setWeekOf(dayKey(addDays(weekOf, 7)))}><Icon name="arrow" size={17}/></button>
-        </div>
+  return <section className="panel">
+    <div className="section-head">
+      <div><h2>Semaine du {formatDay(addDays(weekOf, 0), { day: 'numeric', month: 'long' })}</h2><p>Ajustez la capacité, supprimez un créneau vide ou fermez une journée.</p></div>
+      <div className="week-nav">
+        <button className="icon-button" aria-label="Semaine précédente" disabled={weekOf <= weekStart(today)} onClick={() => setWeekOf(dayKey(addDays(weekOf, -7)))}><Icon name="back" size={17}/></button>
+        <button className="btn ghost small" onClick={() => setWeekOf(weekStart(today))}>Cette semaine</button>
+        <button className="icon-button" aria-label="Semaine suivante" disabled={weekEnd > lastSlotDay && weekOf >= weekStart(lastSlotDay)} onClick={() => setWeekOf(dayKey(addDays(weekOf, 7)))}><Icon name="arrow" size={17}/></button>
+        <button className="btn primary" onClick={() => setPlanning(true)}><Icon name="plus" size={18}/>Ouvrir des créneaux</button>
       </div>
-      {slots === null ? <div className="skeleton" style={{ height: 200 }}/> : !groups.length ? <Empty icon="calendar" title={slots.length ? 'Aucun créneau cette semaine' : 'Aucun créneau à venir'} text={slots.length ? 'Changez de semaine ou générez de nouveaux créneaux.' : 'Générez votre planning avec le formulaire : il ne crée que des créneaux pendant les heures d’ouverture.'}/>
-        : groups.map(([key, items]) => {
-          const reserved = items.reduce((n, s) => n + s.reserved, 0); const capacity = items.reduce((n, s) => n + s.capacity, 0);
-          return <div key={key} className="slot-day">
-            <h3><span>{formatDay(items[0].startsAt)}</span><span style={{ display: 'flex', gap: 10, alignItems: 'center' }}><small>{reserved}/{capacity} places</small><button className="link-button" style={{ color: 'var(--danger)', fontSize: '.8rem' }} disabled={!!busy} onClick={() => void closeDay(key, items)}>Fermer la journée</button></span></h3>
-            <div className="slot-grid">{items.map(slot => {
-              const ratio = slot.capacity ? Math.min(1, slot.reserved / slot.capacity) : 1;
-              return <div key={slot.id} className="slot" aria-busy={busy === slot.id}>
-                <div className="slot-head"><strong>{formatTime(slot.startsAt)}</strong>{slot.reserved === 0 ? <button className="icon-button" style={{ width: 30, height: 30 }} disabled={!!busy} onClick={() => void remove(slot)} aria-label={`Supprimer le créneau de ${formatTime(slot.startsAt)}`}><Icon name="trash" size={15}/></button> : <span className={`tag ${ratio >= 1 ? 'rejected' : 'pending'}`}>{ratio >= 1 ? 'Complet' : `${slot.available} libre(s)`}</span>}</div>
-                <div className={`bar ${ratio >= 1 ? 'full' : ''}`}><span style={{ width: `${ratio * 100}%` }}/></div>
-                <div className="stepper">
-                  <button disabled={!!busy || slot.capacity <= slot.reserved} onClick={() => void changeCapacity(slot, slot.capacity - 1)} aria-label="Retirer une place">−</button>
-                  <span>{slot.reserved}/{slot.capacity}</span>
-                  <button disabled={!!busy || slot.capacity >= 1000} onClick={() => void changeCapacity(slot, slot.capacity + 1)} aria-label="Ajouter une place">+</button>
-                </div>
-              </div>;
-            })}</div>
-          </div>;
-        })}
-    </section>
-    <form className="panel" onSubmit={generate}>
-      <span className="eyebrow">Générer en un clic</span>
-      <h2 style={{ marginTop: 6 }}>Ouvrir une période</h2>
+    </div>
+    {slots === null ? <div className="skeleton" style={{ height: 240 }}/> : !groups.length ? <Empty icon="calendar" title={slots.length ? 'Aucun créneau cette semaine' : 'Aucun créneau à venir'} text={slots.length ? 'Changez de semaine ou ouvrez de nouveaux créneaux.' : 'Ouvrez une période : seuls des créneaux pendant les heures d’ouverture sont créés.'}><button className="btn primary" style={{ marginTop: 18 }} onClick={() => setPlanning(true)}>Ouvrir des créneaux</button></Empty>
+      : <div className="slot-week">{groups.map(([key, items]) => {
+        const reserved = items.reduce((n, slot) => n + slot.reserved, 0); const capacity = items.reduce((n, slot) => n + slot.capacity, 0);
+        return <div key={key} className="slot-col">
+          <div className="slot-col-head">
+            <strong>{formatDay(items[0].startsAt, { weekday: 'long', day: 'numeric' })}</strong>
+            <small>{reserved}/{capacity} places réservées</small>
+            <button className="link-button danger" disabled={!!busy} onClick={() => void closeDay(key, items)}>Fermer la journée</button>
+          </div>
+          {items.map(slot => {
+            const ratio = slot.capacity ? Math.min(1, slot.reserved / slot.capacity) : 1;
+            return <div key={slot.id} className={`slot ${ratio >= 1 ? 'full-slot' : ''}`} aria-busy={busy === slot.id}>
+              <div className="slot-head"><strong>{formatTime(slot.startsAt)}</strong>{slot.reserved === 0 ? <button className="icon-button" disabled={!!busy} onClick={() => void remove(slot)} aria-label={`Supprimer le créneau de ${formatTime(slot.startsAt)}`}><Icon name="trash" size={15}/></button> : <span className={`tag ${ratio >= 1 ? 'rejected' : 'pending'}`}>{ratio >= 1 ? 'Complet' : `${slot.available} libre(s)`}</span>}</div>
+              <div className={`bar ${ratio >= 1 ? 'full' : ''}`}><span style={{ width: `${ratio * 100}%` }}/></div>
+              <div className="stepper">
+                <button disabled={!!busy || slot.capacity <= slot.reserved} onClick={() => void changeCapacity(slot, slot.capacity - 1)} aria-label="Retirer une place">−</button>
+                <span>{slot.reserved}/{slot.capacity} places</span>
+                <button disabled={!!busy || slot.capacity >= 1000} onClick={() => void changeCapacity(slot, slot.capacity + 1)} aria-label="Ajouter une place">+</button>
+              </div>
+            </div>;
+          })}
+        </div>;
+      })}</div>}
+    {planning && <Modal as="form" wide onClose={() => setPlanning(false)} label="Ouvrir des créneaux" onSubmit={generate}>
+      <h2>Ouvrir des créneaux</h2>
       <p>Seuls les créneaux du lundi au samedi, entre 08:00 et 16:00, sont créés. Ceux qui existent déjà sont conservés.</p>
       <div className="form-grid">
         <label>Du<input type="date" required min={today} value={plan.from} onChange={event => set('from', event.target.value)}/></label>
@@ -319,10 +323,10 @@ function SlotsTab({ base, slots, busy, run, confirm, reload }) {
         <label>Durée d’un créneau<select value={plan.intervalMinutes} onChange={event => set('intervalMinutes', Number(event.target.value))}>{[15, 20, 30, 45, 60].map(value => <option key={value} value={value}>{value} min</option>)}</select></label>
         <label>Places par créneau<input type="number" min="1" max="1000" required value={plan.capacity} onChange={event => set('capacity', event.target.value)}/></label>
       </div>
-      <div className="preview" aria-live="polite">{preview.error || (preview.count ? `${preview.count} créneaux sur ${preview.days} jour(s) · ${preview.count * Number(plan.capacity || 0)} places` : 'Aucun créneau dans cette sélection.')}</div>
-      <button className="btn primary full" style={{ marginTop: 14 }} disabled={!!busy || !!preview.error || !preview.count || !plan.weekdays.length || Number(plan.capacity) < 1}>{busy === 'plan' ? 'Création…' : `Publier ${preview.count || ''} créneaux`}</button>
-    </form>
-  </div>;
+      <div className="preview" aria-live="polite">{preview.error || (preview.count ? `${preview.count} créneaux sur ${preview.days} jour(s), soit ${preview.count * Number(plan.capacity || 0)} places` : 'Aucun créneau dans cette sélection.')}</div>
+      <div className="dialog-actions"><button type="button" className="btn ghost" onClick={() => setPlanning(false)}>Annuler</button><button className="btn primary" disabled={!!busy || !!preview.error || !preview.count || !plan.weekdays.length || Number(plan.capacity) < 1}>{busy === 'plan' ? 'Création…' : `Publier ${preview.count || ''} créneaux`}</button></div>
+    </Modal>}
+  </section>;
 }
 
 function TeamTab({ base, agents, busy, run, confirm, reload, shopName, owner }) {
@@ -337,27 +341,22 @@ function TeamTab({ base, agents, busy, run, confirm, reload, shopName, owner }) 
     if (!await confirm({ title: `Retirer ${agent.name || agent.email} ?`, text: `Il n’aura plus accès aux rendez-vous de ${shopName}.`, confirm: 'Retirer', danger: true })) return;
     void run(agent.id, async () => { await request(`${base}/agents/${e(agent.id)}`, { method: 'DELETE' }); await reload(); }, 'Agent retiré.');
   };
-  return <div className="grid-2">
-    <section className="panel">
-      <div className="section-head"><div><span className="eyebrow">Équipe</span><h2>Qui accueille les clients ?</h2><p>Les agents confirment les demandes et accueillent les clients depuis l’espace boutique.</p></div></div>
-      <div className="list">
-        <div className="row-item"><span className="avatar">{initials(owner?.name || owner?.email)}</span><span className="row-copy"><strong>{owner?.name || owner?.email} (vous)</strong><small>Propriétaire · accès à toutes vos boutiques</small></span><span className="tag on">Propriétaire</span></div>
-        {agents === null ? <div className="skeleton" style={{ height: 64 }}/> : agents.map(agent => <div key={agent.id} className="row-item">
-          <span className="avatar soft">{initials(agent.name || agent.email)}</span>
-          <span className="row-copy"><strong>{agent.name || agent.email}</strong><small>{agent.email} · depuis le {formatDay(agent.assignedAt, { day: 'numeric', month: 'long' })}</small></span>
-          <button className="btn danger small" disabled={!!busy} onClick={() => void remove(agent)}>Retirer</button>
-        </div>)}
-      </div>
-      {agents && !agents.length && <p className="hint">Aucun agent pour l’instant : vous pouvez accueillir vous-même les clients, ou ajouter un membre de l’équipe.</p>}
-    </section>
-    <form className="panel" onSubmit={add}>
-      <span className="eyebrow">Inviter</span>
-      <h2 style={{ marginTop: 6 }}>Ajouter un agent</h2>
-      <p>L’agent doit déjà avoir un compte Robia. Il retrouvera la boutique dès sa prochaine connexion à l’espace boutique.</p>
-      <label>Adresse e-mail<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="agent@exemple.mg"/></label>
-      <button className="btn primary full" style={{ marginTop: 16 }} disabled={!!busy || !email.trim()}>{busy === 'agent' ? 'Ajout…' : 'Ajouter à l’équipe'}</button>
+  return <section className="panel">
+    <div className="section-head"><div><h2>Qui accueille les clients ?</h2><p>Les agents confirment les demandes et accueillent les clients depuis l’espace boutique.</p></div></div>
+    <form className="inline-form" onSubmit={add}>
+      <label>Ajouter un agent par son adresse e-mail<input type="email" required value={email} onChange={event => setEmail(event.target.value)} placeholder="agent@exemple.mg"/></label>
+      <button className="btn primary" disabled={!!busy || !email.trim()}>{busy === 'agent' ? 'Ajout…' : 'Ajouter à l’équipe'}</button>
     </form>
-  </div>;
+    <div className="list">
+      <div className="row-item"><span className="avatar">{initials(owner?.name || owner?.email)}</span><span className="row-copy"><strong>{owner?.name || owner?.email} (vous)</strong><small>Propriétaire, accès à toutes vos boutiques</small></span><span className="tag on">Propriétaire</span></div>
+      {agents === null ? <div className="skeleton" style={{ height: 64 }}/> : agents.map(agent => <div key={agent.id} className="row-item">
+        <span className="avatar soft">{initials(agent.name || agent.email)}</span>
+        <span className="row-copy"><strong>{agent.name || agent.email}</strong><small>{agent.email}, depuis le {formatDay(agent.assignedAt, { day: 'numeric', month: 'long' })}</small></span>
+        <button className="btn danger small" disabled={!!busy} onClick={() => void remove(agent)}>Retirer</button>
+      </div>)}
+    </div>
+    <p className="hint">L’agent doit déjà avoir un compte Robia. {agents && !agents.length ? 'Sans agent, vous pouvez accueillir vous-même les clients depuis l’espace boutique.' : 'Il retrouve la boutique à sa prochaine connexion.'}</p>
+  </section>;
 }
 
 function CreateShop({ onClose, onCreated }) {
